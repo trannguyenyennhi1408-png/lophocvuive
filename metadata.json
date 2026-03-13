@@ -1,0 +1,5 @@
+{
+  "name": "Trình Tạo Video AI",
+  "description": "Một ứng dụng web để tạo video ngắn bằng Google Gemini API. Nhập một lời nhắc, tùy chọn tải lên một hình ảnh tham chiếu, và để AI tạo ra một video độc đáo.",
+  "requestFramePermissions": []
+}
