@@ -4,7 +4,8 @@ import { CHARACTER_STYLES, LOADING_MESSAGES } from './constants';
 import type { LoadingState, Message, VideoResult } from './types';
 import { generateVideo } from './services/geminiService';
 import Spinner from './components/Spinner';
-import { UploadIcon, SparklesIcon, XCircleIcon } from './components/Icons';
+import { UploadIcon, SparklesIcon, XCircleIcon, CogIcon } from './components/Icons';
+import SettingsModal from './components/SettingsModal';
 
 const App: React.FC = () => {
   const [characterStyle, setCharacterStyle] = useState<string>(CHARACTER_STYLES[0]);
@@ -16,6 +17,28 @@ const App: React.FC = () => {
   const [loadingState, setLoadingState] = useState<LoadingState>({ active: false, message: '' });
   const [message, setMessage] = useState<Message | null>(null);
   const [generatedVideos, setGeneratedVideos] = useState<VideoResult[]>([]);
+
+  const [apiKey, setApiKey] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3-flash-preview');
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    const savedModel = localStorage.getItem('gemini_selected_model');
+    if (savedKey) setApiKey(savedKey);
+    if (savedModel) setSelectedModel(savedModel);
+    
+    if (!savedKey) {
+      setIsSettingsOpen(true);
+    }
+  }, []);
+
+  const handleSaveSettings = (newKey: string, newModel: string) => {
+    setApiKey(newKey);
+    setSelectedModel(newModel);
+    localStorage.setItem('gemini_api_key', newKey);
+    localStorage.setItem('gemini_selected_model', newModel);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadingMessageInterval = useRef<number | null>(null);
@@ -58,6 +81,12 @@ const App: React.FC = () => {
   };
 
   const handleCreate = useCallback(async () => {
+    if (!apiKey) {
+      setMessage({ type: 'error', text: 'Vui lòng cài đặt API Key trong mục Settings trước khi tiếp tục.' });
+      setIsSettingsOpen(true);
+      return;
+    }
+
     if (!prompt.trim()) {
       setMessage({ type: 'error', text: 'Vui lòng nhập prompt để mô tả video.' });
       return;
@@ -74,7 +103,7 @@ const App: React.FC = () => {
       };
       
       stopLoadingMessages(); // Stop random messages and show actual progress
-      const videoUrls = await generateVideo(fullPrompt, referenceImage, numVideos, updateProgress);
+      const videoUrls = await generateVideo(fullPrompt, referenceImage, numVideos, updateProgress, apiKey, selectedModel);
       
       const newVideos: VideoResult[] = videoUrls.map(url => ({
         id: new Date().toISOString() + Math.random(),
@@ -87,7 +116,7 @@ const App: React.FC = () => {
       setMessage({ type: 'success', text: `Tạo thành công ${videoUrls.length} video!` });
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: 'error', text: `Tạo video thất bại: ${err.message}` });
+      setMessage({ type: 'error', text: err.message || 'Có lỗi xảy ra', isStopped: true });
     } finally {
       stopLoadingMessages();
       setLoadingState({ active: false, message: '' });
@@ -105,8 +134,27 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans p-4 sm:p-6 lg:p-8">
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)}
+        apiKey={apiKey}
+        setApiKey={handleSaveSettings}
+        selectedModel={selectedModel}
+      />
       <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-8">
+        <header className="text-center mb-8 relative">
+          <div className="absolute right-0 top-0 flex flex-col items-end">
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <CogIcon className="w-4 h-4" />
+              Settings
+            </button>
+            {!apiKey && (
+              <span className="text-xs text-red-500 font-medium mt-1">Lấy API key để sử dụng app</span>
+            )}
+          </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-slate-800 tracking-tight">
             Trình Tạo Video <span className="text-indigo-600">AI</span>
           </h1>
@@ -201,8 +249,11 @@ const App: React.FC = () => {
             )}
 
             {message && (
-              <div className={`p-3 rounded-lg text-sm text-center ${message.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                {message.text}
+              <div className={`p-4 rounded-lg text-sm flex flex-col items-center justify-center text-center ${message.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-green-50 border border-green-200 text-green-800'}`}>
+                {message.isStopped && (
+                  <span className="font-bold mb-1 uppercase text-xs tracking-wider">Đã dừng do lỗi</span>
+                )}
+                <span>{message.text}</span>
               </div>
             )}
           </div>
